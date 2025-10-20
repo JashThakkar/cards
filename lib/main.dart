@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
 
-// Here we are using a global variable. You can use something like
-// get_it in a production app.
 final dbHelper = DatabaseHelper();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // initialize the database
   await dbHelper.init();
   runApp(const MyApp());
 }

@@ -188,7 +188,6 @@ class _FolderPageState extends State<FolderPage> {
     await _loadCards();
   }
 
-   START: update and delete helpers (simple, boring dialogs)
   Future<void> _updateCard(Map<String, dynamic> card) async {
     final nameCtrl = TextEditingController(text: card['name'] ?? '');
     final suitCtrl = TextEditingController(text: card['suit'] ?? widget.folder['name']);

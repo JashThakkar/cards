@@ -63,41 +63,93 @@ class SuitSelectionPage extends StatelessWidget {
         mainAxisSpacing: 20,
         crossAxisSpacing: 20,
         children: suits.map((suit) {
-          return GestureDetector(
-            onTap: () async {
-              final db = DatabaseHelper.instance;
+          // show preview image + card count per folder
+          final db = DatabaseHelper.instance; 
+          return FutureBuilder<Map<String, dynamic>>( 
+            future: () async { 
+              // find this suit's folder row
               final folders = await db.getFolders();
-              final folder = folders.firstWhere(
-                (f) => f['name'] == suit['name'],
-              );
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => FolderPage(folder: folder),
-                ),
-              );
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.white,
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(2, 3),
+              final folder = folders.firstWhere((f) => f['name'] == suit['name']);
+              final int folderId = folder['id'] as int;
+              // get preview image (first card image) + count
+              final count = await db.countCardsInFolder(folderId);
+              final preview = await db.firstCardImageUrl(folderId);
+              return {
+                'folder': folder,
+                'count': count,
+                'preview': preview,
+              };
+            }(), 
+            builder: (context, snap) { 
+              Widget content;
+              if (!snap.hasData) {
+                content = const Center(child: CircularProgressIndicator());
+              } else {
+                final folder = snap.data!['folder'] as Map<String, dynamic>;
+                final count = snap.data!['count'] as int;
+                final preview = snap.data!['preview'] as String?;
+                content = GestureDetector(
+                  onTap: () async {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FolderPage(folder: folder),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.white,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(2, 3),
+                        ),
+                      ],
+                      border: Border.all(color: suit['color'] as Color, width: 3),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: (preview != null && preview.isNotEmpty)
+                              ? ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                                  child: Image.network(
+                                    preview,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    suit['icon'] as String,
+                                    style: TextStyle(fontSize: 64, color: suit['color'] as Color),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            folder['name'] as String,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
+                          child: Text('$count cards'),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-                border: Border.all(color: suit['color'] as Color, width: 3),
-              ),
-              child: Center(
-                child: Text(
-                  suit['icon'] as String,
-                  style: TextStyle(fontSize: 64, color: suit['color'] as Color),
-                ),
-              ),
-            ),
+                );
+              }
+              return content;
+            },
           );
+           END
         }).toList(),
       ),
     );
@@ -136,6 +188,49 @@ class _FolderPageState extends State<FolderPage> {
     await _loadCards();
   }
 
+   START: update and delete helpers (simple, boring dialogs)
+  Future<void> _updateCard(Map<String, dynamic> card) async {
+    final nameCtrl = TextEditingController(text: card['name'] ?? '');
+    final suitCtrl = TextEditingController(text: card['suit'] ?? widget.folder['name']);
+    final imgCtrl  = TextEditingController(text: card['imageUrl'] ?? '');
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Update Card'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+            TextField(controller: suitCtrl, decoration: const InputDecoration(labelText: 'Suit')),
+            TextField(controller: imgCtrl,  decoration: const InputDecoration(labelText: 'Image URL')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await db.updateCard({
+                'id': card['id'],
+                'name': nameCtrl.text,
+                'suit': suitCtrl.text,
+                'imageUrl': imgCtrl.text,
+                'folderId': widget.folder['id'],
+              });
+              if (context.mounted) Navigator.pop(context);
+              _loadCards();
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteCard(int id) async {
+    await db.deleteCard(id);
+    _loadCards();
+  }
+   END
+
   @override
   void initState() {
     super.initState();
@@ -172,18 +267,54 @@ class _FolderPageState extends State<FolderPage> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(8), 
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount( 
+                crossAxisCount: 2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 0.9,
+              ),
               itemCount: cards.length,
               itemBuilder: (context, index) {
                 final card = cards[index];
-                return ListTile(
-                  title: Text(card['name']),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () async {
-                      await db.deleteCard(card['id']);
-                      _loadCards();
-                    },
+                final img = (card['imageUrl'] as String?) ?? '';
+                return Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: (img.isNotEmpty)
+                            ? Image.network(img, fit: BoxFit.cover)
+                            : const Center(child: Icon(Icons.image_not_supported)),
+                      ),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          card['name']?.toString() ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              tooltip: 'Update', 
+                              icon: const Icon(Icons.edit, size: 20), 
+                              onPressed: () => _updateCard(card), 
+                            ),
+                            IconButton(
+                              tooltip: 'Delete',
+                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                              onPressed: () => _deleteCard(card['id']),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

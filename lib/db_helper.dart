@@ -55,7 +55,6 @@ class DatabaseHelper {
     ''');
   }
 
-  // Folder Methods
   Future<int> insertFolder(Map<String, dynamic> folder) async {
     Database db = await database;
     return await db.insert(folderTable, folder);
@@ -66,7 +65,6 @@ class DatabaseHelper {
     return await db.query(folderTable);
   }
 
-  // Card Methods
   Future<int> insertCard(Map<String, dynamic> card) async {
     Database db = await database;
     return await db.insert(cardTable, card);

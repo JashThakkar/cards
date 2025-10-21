@@ -149,7 +149,6 @@ class SuitSelectionPage extends StatelessWidget {
               return content;
             },
           );
-           END
         }).toList(),
       ),
     );
@@ -228,7 +227,6 @@ class _FolderPageState extends State<FolderPage> {
     await db.deleteCard(id);
     _loadCards();
   }
-   END
 
   @override
   void initState() {

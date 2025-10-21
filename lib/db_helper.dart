@@ -7,7 +7,7 @@ class DatabaseHelper {
   static const _databaseName = "CardsDatabase.db";
   static const _databaseVersion = 1;
 
-  static const folderTable = 'folders';
+  static const folderTable = 'folders'; 
   static const cardTable = 'cards';
 
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -79,4 +79,40 @@ class DatabaseHelper {
     Database db = await database;
     return await db.delete(cardTable, where: 'id = ?', whereArgs: [id]);
   }
+
+  Future<int> countCardsInFolder(int folderId) async {
+  final db = await database;
+  final res = await db.rawQuery(
+    'SELECT COUNT(*) AS c FROM $cardTable WHERE folderId = ?',
+    [folderId],
+  );
+  return (res.isNotEmpty ? (res.first['c'] as int?) : 0) ?? 0;
+  }
+
+	Future<String?> firstCardImageUrl(int folderId) async {
+	final db = await database;
+	final res = await db.query(
+		cardTable,
+		columns: ['imageUrl'],
+		where: 'folderId = ? AND imageUrl IS NOT NULL',
+		whereArgs: [folderId],
+		orderBy: 'id ASC',
+		limit: 1,
+	);
+	if (res.isEmpty) return null;
+	final url = res.first['imageUrl'];
+	return (url is String && url.isNotEmpty) ? url : null;
+	}
+
+	Future<int> updateCard(Map<String, dynamic> card) async {
+	final db = await database;
+	if (!card.containsKey('id')) throw ArgumentError('card needs id');
+	final id = card['id'] as int;
+	return db.update(cardTable, card, where: 'id = ?', whereArgs: [id]);
+	}
+
+	Future<List<Map<String, dynamic>>> getUnassignedCards() async {
+	final db = await database;
+	return db.query(cardTable, where: 'folderId IS NULL');
+	}
 }

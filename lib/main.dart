@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
+import 'dart:async';
 
-
-final dbHelper = DatabaseHelper();
-
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dbHelper.init();
+  final db = DatabaseHelper.instance;
+  await db.database;
+
+  final folders = await db.getFolders();
+  if (folders.isEmpty) {
+    await db.insertFolder({
+      'name': 'Spades',
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    await db.insertFolder({
+      'name': 'Hearts',
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    await db.insertFolder({
+      'name': 'Diamonds',
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    await db.insertFolder({
+      'name': 'Clubs',
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+  }
+
   runApp(const MyApp());
 }
 
@@ -16,155 +36,161 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SQFlite Demo',
+      title: 'Card Folders',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const MyHomePage(),
+      home: const SuitSelectionPage(),
     );
   }
 }
 
-class Folder {
-  int? id;
-  String name;
-  String? previewImage;
-  DateTime createdAt;
+class SuitSelectionPage extends StatelessWidget {
+  const SuitSelectionPage({super.key});
 
-  Folder({this.id, required this.name, this.previewImage, required this.createdAt});
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'previewImage': previewImage,
-      'createdAt': createdAt.toIso8601String(),
-    };
-  }
-
-  factory Folder.fromMap(Map<String, dynamic> map) {
-    return Folder(
-      id: map['id'],
-      name: map['name'],
-      previewImage: map['previewImage'],
-      createdAt: DateTime.parse(map['createdAt']),
-    );
-  }
-}
-
-class Card {
-  int? id;
-  String name;
-  String suit;
-  String imageUrl;
-  String? imageBytes; // base64 string
-  int? folderId;
-  DateTime createdAt;
-
-  Card({
-    this.id,
-    required this.name,
-    required this.suit,
-    required this.imageUrl,
-    this.imageBytes,
-    this.folderId,
-    required this.createdAt,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'suit': suit,
-      'imageUrl': imageUrl,
-      'imageBytes': imageBytes,
-      'folderId': folderId,
-      'createdAt': createdAt.toIso8601String(),
-    };
-  }
-
-  factory Card.fromMap(Map<String, dynamic> map) {
-    return Card(
-      id: map['id'],
-      name: map['name'],
-      suit: map['suit'],
-      imageUrl: map['imageUrl'],
-      imageBytes: map['imageBytes'],
-      folderId: map['folderId'],
-      createdAt: DateTime.parse(map['createdAt']),
-    );
-  }
-}
-
-
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key});
-
-  // homepage layout
   @override
   Widget build(BuildContext context) {
+    final suits = [
+      {'name': 'Spades', 'icon': '♠️', 'color': Colors.black},
+      {'name': 'Hearts', 'icon': '♥️', 'color': Colors.red},
+      {'name': 'Diamonds', 'icon': '♦️', 'color': Colors.red},
+      {'name': 'Clubs', 'icon': '♣️', 'color': Colors.black},
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('sqflite')),
-      body: Padding(
-        padding: EdgeInsets.all(10),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Padding(padding: EdgeInsetsGeometry.all(10)),
-              ElevatedButton(onPressed: _insert, child: const Text('insert')),
-              const SizedBox(height: 10),
-              Padding(padding: EdgeInsetsGeometry.all(10)),
-
-              ElevatedButton(onPressed: _query, child: const Text('query')),
-              const SizedBox(height: 10),
-              Padding(padding: EdgeInsetsGeometry.all(10)),
-
-              ElevatedButton(onPressed: _update, child: const Text('update')),
-              const SizedBox(height: 10),
-              Padding(padding: EdgeInsetsGeometry.all(10)),
-
-              ElevatedButton(onPressed: _delete, child: const Text('delete')),
-            ],
-          ),
-        ),
+      appBar: AppBar(title: const Text('Select a Suit')),
+      body: GridView.count(
+        crossAxisCount: 2,
+        padding: const EdgeInsets.all(20),
+        mainAxisSpacing: 20,
+        crossAxisSpacing: 20,
+        children: suits.map((suit) {
+          return GestureDetector(
+            onTap: () async {
+              final db = DatabaseHelper.instance;
+              final folders = await db.getFolders();
+              final folder = folders.firstWhere(
+                (f) => f['name'] == suit['name'],
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FolderPage(folder: folder),
+                ),
+              );
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: Offset(2, 3),
+                  ),
+                ],
+                border: Border.all(color: suit['color'] as Color, width: 3),
+              ),
+              child: Center(
+                child: Text(
+                  suit['icon'] as String,
+                  style: TextStyle(fontSize: 64, color: suit['color'] as Color),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
+}
 
-  // Button onPressed methods
+class FolderPage extends StatefulWidget {
+  final Map<String, dynamic> folder;
+  const FolderPage({super.key, required this.folder});
 
-  void _insert() async {
-    // row to insert
-    Map<String, dynamic> row = {
-      DatabaseHelper.columnName: 'Bob',
-      DatabaseHelper.columnAge: 23,
-    };
-    final id = await dbHelper.insert(row);
-    debugPrint('inserted row id: $id');
+  @override
+  State<FolderPage> createState() => _FolderPageState();
+}
+
+class _FolderPageState extends State<FolderPage> {
+  List<Map<String, dynamic>> cards = [];
+  final db = DatabaseHelper.instance;
+  final TextEditingController _controller = TextEditingController();
+
+  Future<void> _loadCards() async {
+    final data = await db.getCardsByFolder(widget.folder['id']);
+    setState(() {
+      cards = data;
+    });
   }
 
-  void _query() async {
-    final allRows = await dbHelper.queryAllRows();
-    debugPrint('query all rows:');
-    for (final row in allRows) {
-      debugPrint(row.toString());
-    }
+  Future<void> _addCard(String name) async {
+    await db.insertCard({
+      'name': name,
+      'suit': widget.folder['name'],
+      'imageUrl': '',
+      'folderId': widget.folder['id'],
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    _controller.clear();
+    await _loadCards();
   }
 
-  void _update() async {
-    // row to update
-    Map<String, dynamic> row = {
-      DatabaseHelper.columnId: 1,
-      DatabaseHelper.columnName: 'Mary',
-      DatabaseHelper.columnAge: 32,
-    };
-    final rowsAffected = await dbHelper.update(row);
-    debugPrint('updated $rowsAffected row(s)');
+  @override
+  void initState() {
+    super.initState();
+    _loadCards();
   }
 
-  void _delete() async {
-    // Assuming that the number of rows is the id for the last row.
-    final id = await dbHelper.queryRowCount();
-    final rowsDeleted = await dbHelper.delete(id);
-    debugPrint('deleted $rowsDeleted row(s): row $id');
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("${widget.folder['name']} Folder")),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter card name (A, 2, 3, J, Q, K...)',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () {
+                    if (_controller.text.isNotEmpty) {
+                      _addCard(_controller.text.trim());
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: cards.length,
+              itemBuilder: (context, index) {
+                final card = cards[index];
+                return ListTile(
+                  title: Text(card['name']),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () async {
+                      await db.deleteCard(card['id']);
+                      _loadCards();
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
